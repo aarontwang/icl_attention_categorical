@@ -19,8 +19,6 @@ from torch.utils.data import DataLoader
 import numpy as np
 
 from transformer import *
-from transformer_ff import *
-from transformer_moe import *
 from data import *
 from config import config
 from util import *
@@ -43,19 +41,12 @@ parser.add_argument("categories", type=int, default=25, help="number of categori
 parser.add_argument("dataset_size", type=int, default=125, help="number of in-context examples per contextual dataset")
 parser.add_argument("input_size", type=int, default=10, help="dimension of input covariates x_i")
 parser.add_argument("embedding_size", type=int, default=5, help="dimension of embedding vectors")
-# parser.add_argument("j", type=int, default=5, help="number of alphas to draw for data generation")
 parser.add_argument("high_dim_k", type=int, default=5, help="number of clusters for high-dim data")
 parser.add_argument("high_dim_lambda", type=float, default=10, help="lambda scaling factor for high-dim data")
 parser.add_argument("dist", type=float, default=0.1, help="distance between clusters for high-dim data")
-parser.add_argument("mixture_j", type=int, default=10, help="value of J for high-dim mixture data generation")
-parser.add_argument("mixture_u_var", type=float, default=5.0, help="variance of u for high-dim mixture data generation")
 parser.add_argument("examples_per_cat", type=int, default=10, help="number of examples per category for ImageNet data")
 
-parser.add_argument("num_ff_layers", type=int, default=1, help="number of feedforward layers")
-parser.add_argument("ff_hidden_size", type=int, default=20, help="dimension of ff hidden layers")
 parser.add_argument("num_heads", type=int, default=1, help="number of non-erasure heads in each attention layer")
-parser.add_argument("num_mlps", type=int, default=1, help="number of MLPs for MOE")
-parser.add_argument("moe_k", type=int, default=1, help="value of k for MOE")
 
 parser.add_argument("training_data_size", type=int, default=2048, help="number of contextual datasets for training")
 parser.add_argument("minibatch_size", type=int, default=512, help="number of contextual datasets per minibatch")
@@ -71,8 +62,7 @@ parser.add_argument("-w", "--unique_w_e", action="store_true", default=False,
 parser.add_argument("-g", "--gd_init", action="store_true", default=False,
                     help="use gd parameters as initial Trained TF params")
 parser.add_argument("-v", "--holdout", action="store_true", default=False,
-                    help="set true to not use held out dataset for testing in ImageNet data")
-parser.add_argument("-f", "--use_mlp", action="store_true", default=False, help="use feedforward network")
+                    help="set true to use held out dataset for testing in ImageNet data")
 parser.add_argument("-s", "--shared_ff", action="store_true", default=False,
                     help="share one feedforward network across all layers")
 
@@ -202,14 +192,10 @@ def run_experiment(save_path, device_id, model_type, num_seeds=1, num_layers=1, 
                    model_kernel='linear',
                    categories=2, dataset_size=20, input_size=2,
                    embedding_size=5, high_dim_k=5, high_dim_lambda=10, dist=0.1,
-                   mixture_j=10, mixture_u_var=5,
                    one_hot_emb=False, gd_plus=False,
-                   unique_w_e=False, examples_per_cat=10, num_ff_layers=1, ff_hidden_size=10, num_heads=1, num_mlps=1,
-                   moe_k=1,
-                   shared_ff=False, training_data_size=2048,
+                   unique_w_e=False, examples_per_cat=10, num_heads=1, training_data_size=2048,
                    minibatch_size=512, training_steps_tf=5000, training_steps_gd=5000,
-                   holdout=True, gd_init=False,
-                   use_mlp=False, seed=42):
+                   holdout=True, gd_init=False, seed=42):
     """Run experiments."""
     device = torch.device("cuda:{}".format(device_id) if torch.cuda.is_available() else "cpu")
 
@@ -224,14 +210,11 @@ def run_experiment(save_path, device_id, model_type, num_seeds=1, num_layers=1, 
               data_kernel=data_kernel, model_kernel=model_kernel, num_cats=categories,
               c_size=dataset_size, i_size=input_size, e_size=embedding_size,
               high_dim_k=high_dim_k, high_dim_lambda=high_dim_lambda, dist=dist,
-              mixture_j=mixture_j, mixture_u_var=mixture_u_var,
               one_hot_emb=one_hot_emb, gd_plus=gd_plus, unique_w_e=unique_w_e,
-              examples_per_cat=examples_per_cat,
-              num_ff_layers=num_ff_layers, ff_hidden_size=ff_hidden_size,
-              num_heads=num_heads, num_mlps=num_mlps, moe_k=moe_k, shared_ff=shared_ff,
+              examples_per_cat=examples_per_cat, num_heads=num_heads,
               training_data_size=training_data_size, minibatch_size=minibatch_size,
               training_steps_tf=training_steps_tf, training_steps_gd=training_steps_gd,
-              holdout=holdout, gd_init=gd_init, use_mlp=use_mlp, num_queries=1)
+              holdout=holdout, gd_init=gd_init, num_queries=1)
 
     # initialize lists to store metrics
     tf_eval_loss_list = []
@@ -326,29 +309,6 @@ def run_experiment(save_path, device_id, model_type, num_seeds=1, num_layers=1, 
                                        data_e_size=config.data_e_size, params_e_size=config.e_size,
                                        cats=config.num_cats, k=config.high_dim_k,
                                        dist=config.dist, l=config.high_dim_lambda, W_e=W_e, input_range=1)
-    if config.data_kernel == 'high_dim_mixture':
-        train_data = HighDimMixtureCategorical(device=device, model_type=config.model_type, seed=100,
-                                               batches=config.bs_train,
-                                               i_size=config.input_size, c_size=config.dataset_size,
-                                               data_e_size=config.data_e_size, params_e_size=config.e_size,
-                                               cats=config.num_cats, k=config.high_dim_k,
-                                               dist=config.dist, l=config.high_dim_lambda, W_e=W_e,
-                                               J=mixture_j, u_var=mixture_u_var, input_range=1)
-        val_data = HighDimMixtureCategorical(device=device, model_type=config.model_type, seed=100 + config.bs_train,
-                                             batches=config.bs_eval,
-                                             i_size=config.input_size, c_size=config.dataset_size,
-                                             data_e_size=config.data_e_size, params_e_size=config.e_size,
-                                             cats=config.num_cats, k=config.high_dim_k,
-                                             dist=config.dist, l=config.high_dim_lambda, W_e=W_e,
-                                             J=mixture_j, u_var=mixture_u_var, input_range=1)
-        eval_data = HighDimMixtureCategorical(device=device, model_type=config.model_type,
-                                              seed=100 + config.bs_train + config.bs_eval,
-                                              batches=config.bs_eval,
-                                              i_size=config.input_size, c_size=config.dataset_size,
-                                              data_e_size=config.data_e_size, params_e_size=config.e_size,
-                                              cats=config.num_cats, k=config.high_dim_k,
-                                              dist=config.dist, l=config.high_dim_lambda, W_e=W_e,
-                                              J=mixture_j, u_var=mixture_u_var, input_range=1)
     elif config.data_kernel == 'imagenet':
         data = torch.from_numpy(np.load("train_features.npy"))
 
@@ -407,7 +367,6 @@ def run_experiment(save_path, device_id, model_type, num_seeds=1, num_layers=1, 
                                                 include_query=False,
                                                 kernel=config.model_kernel,
                                                 num_queries=1,
-                                                use_mlp=config.use_mlp,
                                                 device=device,
                                                 init_seed=cur_seed).to(device)
         elif config.model_type == 'linear_approx':
@@ -419,41 +378,8 @@ def run_experiment(save_path, device_id, model_type, num_seeds=1, num_layers=1, 
                                                  include_query=False,
                                                  kernel=config.model_kernel,
                                                  num_queries=1,
-                                                 use_mlp=config.use_mlp,
                                                  device=device,
                                                  init_seed=cur_seed).to(device)
-        elif config.model_type == 'feedforward':
-            gd_model = TransformerGDFeedforward(num_layers=config.num_layers,
-                                                num_ff_layers=config.num_ff_layers,
-                                                num_heads=config.num_heads,
-                                                input_size=config.input_size,
-                                                num_categories=config.num_cats,
-                                                emb_size=config.e_size,
-                                                ff_hidden_size=config.ff_hidden_size,
-                                                init_scale=config.init_scale,
-                                                include_query=False,
-                                                kernel=config.model_kernel,
-                                                num_queries=1,
-                                                shared_ff=shared_ff,
-                                                device=device,
-                                                init_seed=cur_seed).to(device)
-        elif config.model_type == 'moe':
-            gd_model = TransformerGDMOE(num_layers=config.num_layers,
-                                        num_ff_layers=config.num_ff_layers,
-                                        num_heads=config.num_heads,
-                                        num_mlps=config.num_mlps,
-                                        input_size=config.input_size,
-                                        num_categories=config.num_cats,
-                                        emb_size=config.e_size,
-                                        ff_hidden_size=config.ff_hidden_size,
-                                        k=config.moe_k,
-                                        init_scale=config.init_scale,
-                                        include_query=False,
-                                        kernel=config.model_kernel,
-                                        num_queries=1,
-                                        shared_ff=shared_ff,
-                                        device=device,
-                                        init_seed=cur_seed).to(device)
 
         for name, param in gd_model.named_parameters():
             if param.requires_grad:
@@ -522,7 +448,6 @@ def run_experiment(save_path, device_id, model_type, num_seeds=1, num_layers=1, 
                                               include_query=False,
                                               kernel=config.model_kernel,
                                               num_queries=1,
-                                              use_mlp=config.use_mlp,
                                               device=device,
                                               init_seed=cur_seed).to(device)
         elif config.model_type == 'linear_approx':
@@ -534,41 +459,8 @@ def run_experiment(save_path, device_id, model_type, num_seeds=1, num_layers=1, 
                                                include_query=False,
                                                kernel=config.model_kernel,
                                                num_queries=1,
-                                               use_mlp=config.use_mlp,
                                                device=device,
                                                init_seed=cur_seed).to(device)
-        elif config.model_type == 'feedforward':
-            tf_model = TransformerFeedforward(num_layers=config.num_layers,
-                                              num_ff_layers=config.num_ff_layers,
-                                              num_heads=config.num_heads,
-                                              input_size=config.input_size,
-                                              num_categories=config.num_cats,
-                                              emb_size=config.e_size,
-                                              ff_hidden_size=config.ff_hidden_size,
-                                              init_scale=config.init_scale,
-                                              include_query=False,
-                                              kernel=config.model_kernel,
-                                              num_queries=1,
-                                              shared_ff=shared_ff,
-                                              device=device,
-                                              init_seed=cur_seed).to(device)
-        elif config.model_type == 'moe':
-            tf_model = TransformerMOE(num_layers=config.num_layers,
-                                      num_ff_layers=config.num_ff_layers,
-                                      num_heads=config.num_heads,
-                                      num_mlps=config.num_mlps,
-                                      input_size=config.input_size,
-                                      num_categories=config.num_cats,
-                                      emb_size=config.e_size,
-                                      ff_hidden_size=config.ff_hidden_size,
-                                      k=config.moe_k,
-                                      init_scale=config.init_scale,
-                                      include_query=False,
-                                      kernel=config.model_kernel,
-                                      num_queries=1,
-                                      shared_ff=shared_ff,
-                                      device=device,
-                                      init_seed=cur_seed).to(device)
 
         for name, param in tf_model.named_parameters():
             if param.requires_grad:
@@ -715,23 +607,15 @@ if __name__ == '__main__':
                    args.high_dim_k,
                    args.high_dim_lambda,
                    args.dist,
-                   args.mixture_j,
-                   args.mixture_u_var,
                    args.one_hot_emb,
                    args.gd_plus,
                    args.unique_w_e,
                    args.examples_per_cat,
-                   args.num_ff_layers,
-                   args.ff_hidden_size,
                    args.num_heads,
-                   args.num_mlps,
-                   args.moe_k,
-                   args.shared_ff,
                    args.training_data_size,
                    args.minibatch_size,
                    args.training_steps_tf,
                    args.training_steps_gd,
                    args.holdout,
                    args.gd_init,
-                   args.use_mlp,
                    seed)

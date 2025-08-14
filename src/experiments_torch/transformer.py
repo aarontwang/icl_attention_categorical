@@ -21,7 +21,6 @@ class TransformerGDInterleaved(nn.Module):
             include_query: bool = False,
             kernel: str = 'linear',
             num_queries: int = 1,
-            use_mlp: bool = False,
             device: str = None,
             init_seed: int = 0
     ):
@@ -37,7 +36,6 @@ class TransformerGDInterleaved(nn.Module):
             include_query: Include query vector in computation.
             kernel: Kernel to use in first self-attention module.
             num_queries: Number of queries in each contextual dataset.
-            use_mlp: Whether to include FF element.
         """
 
         super().__init__()
@@ -49,7 +47,6 @@ class TransformerGDInterleaved(nn.Module):
         self.include_query = include_query
         self.kernel = kernel
         self.num_queries = num_queries
-        self.use_mlp = use_mlp
         self.device = device
 
         # Initialize device
@@ -325,7 +322,6 @@ class TransformerInterleaved(nn.Module):
             include_query: bool = False,
             kernel: str = 'linear',
             num_queries: int = 1,
-            use_mlp: bool = False,
             device: str = None,
             init_seed: int = 0
     ):
@@ -341,7 +337,6 @@ class TransformerInterleaved(nn.Module):
             include_query: Include query vector in computation.
             kernel: Kernel to use in first self-attention module.
             num_queries: Number of queries in each contextual dataset.
-            use_mlp: Whether to include FF element.
         """
 
         super().__init__()
@@ -353,7 +348,6 @@ class TransformerInterleaved(nn.Module):
         self.include_query = include_query
         self.kernel = kernel
         self.num_queries = num_queries
-        self.use_mlp = use_mlp
         self.device = device
 
         # Initialize device
@@ -619,7 +613,6 @@ class TransformerGDLinearApprox(nn.Module):
             include_query: bool = False,
             kernel: str = 'linear',
             num_queries: int = 1,
-            use_mlp: bool = False,
             device: str = None,
             init_seed: int = 0
     ):
@@ -647,7 +640,6 @@ class TransformerGDLinearApprox(nn.Module):
         self.include_query = include_query
         self.kernel = kernel
         self.num_queries = num_queries
-        self.use_mlp = use_mlp
         self.device = device
 
         # Initialize device
@@ -840,7 +832,6 @@ class TransformerLinearApprox(nn.Module):
             include_query: bool = False,
             kernel: str = 'linear',
             num_queries: int = 1,
-            use_mlp: bool = False,
             device: str = None,
             init_seed: int = 0
     ):
@@ -856,7 +847,6 @@ class TransformerLinearApprox(nn.Module):
             include_query: Include query vector in computation.
             kernel: Kernel to use in first self-attention module.
             num_queries: Number of queries in each contextual dataset.
-            use_mlp: Whether to include FF element.
         """
 
         super().__init__()
@@ -868,7 +858,6 @@ class TransformerLinearApprox(nn.Module):
         self.include_query = include_query
         self.kernel = kernel
         self.num_queries = num_queries
-        self.use_mlp = use_mlp
         self.device = device
 
         # Initialize device
